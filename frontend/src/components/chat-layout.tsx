@@ -2,13 +2,14 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Phone, X, Mic, Send, HeartHandshake, BookOpen } from 'lucide-react'
-import { sendChatMessages, type ChatMessage } from '@/lib/api'
+import { sendChatMessages, ApiError, type ChatMessage } from '@/lib/api'
 import { getSessionId, storeSessionId } from '@/lib/session'
 import { ChecklistModal } from './checklist-modal'
 import { CategoryModal } from './category-modal'
 import { SafetyModal } from './safety-modal'
 import { QUICK_EXIT_SECONDS, EMERGENCY_CONTACTS } from '@/lib/constants'
 import { safeExit } from '@/lib/safe-exit'
+import { HTTP_STATUS_CODE } from '@/types/http_status_code'
 
 type DisplayMessage = ChatMessage & {
   timestamp: Date
@@ -68,12 +69,17 @@ export function ChatLayout() {
           { ...prev[prev.length - 1], read: true } as DisplayMessage,
           { role: 'assistant', content: aiReply, timestamp: new Date() },
         ])
-      } catch {
+      } catch (err) {
+        // レート制限時はbackendが返す具体的な案内文をそのまま表示し、それ以外は内部エラーの詳細を出さず汎用文言にとどめる
+        const content =
+          err instanceof ApiError && err.status === HTTP_STATUS_CODE.RATE_LIMITED
+            ? err.message
+            : '申し訳ありません、接続に問題が発生しました。少し待ってからもう一度お試しください。'
         setMessages((prev) => [
           ...prev,
           {
             role: 'assistant',
-            content: '申し訳ありません、接続に問題が発生しました。少し待ってからもう一度お試しください。',
+            content,
             timestamp: new Date(),
           },
         ])

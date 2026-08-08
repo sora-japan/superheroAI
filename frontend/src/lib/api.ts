@@ -1,5 +1,3 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
-
 export type ChatMessage = {
   role: 'user' | 'assistant'
   content: string
@@ -21,6 +19,24 @@ export type ChatMessagesResponse = {
   session_id: string
 }
 
+// backendの共通エラーレスポンス形状（backend/app/main.py の http_exception_handler 参照）
+export type ApiErrorResponse = {
+  error: {
+    code: number
+    message: string
+  }
+}
+
+export class ApiError extends Error {
+  status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
 export async function sendChatMessages(
   params: ChatMessagesParams,
   sessionId: string | null,
@@ -38,17 +54,15 @@ export async function sendChatMessages(
   })
 
   if (!res.ok) {
-    throw new Error(`API error: ${res.status}`)
+    let message = `API error: ${res.status}`
+    try {
+      const data: ApiErrorResponse = await res.json()
+      if (data?.error?.message) message = data.error.message
+    } catch {
+      // レスポンスボディがJSONでない場合はフォールバックのメッセージを使う
+    }
+    throw new ApiError(res.status, message)
   }
 
   return res.json()
-}
-
-export async function checkHealth(): Promise<boolean> {
-  try {
-    const res = await fetch(`${API_BASE}/api/v1/health`)
-    return res.ok
-  } catch {
-    return false
-  }
 }
